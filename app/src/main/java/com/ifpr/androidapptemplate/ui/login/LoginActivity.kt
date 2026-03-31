@@ -12,6 +12,8 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.android.gms.common.SignInButton
 import com.google.android.gms.common.api.ApiException
 import com.google.firebase.FirebaseApp
@@ -28,11 +30,9 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var passwordEditText: EditText
     private lateinit var loginButton: Button
     private lateinit var registerLink: TextView
-    private lateinit var firebaseAuth: FirebaseAuth
-
-    // Novas variáveis para o Google Sign-In
     private lateinit var btnGoogleSignIn: SignInButton
     private lateinit var googleSignInClient: GoogleSignInClient
+    private lateinit var firebaseAuth: FirebaseAuth
 
     companion object {
         private const val TAG = "Login"
@@ -69,6 +69,7 @@ class LoginActivity : AppCompatActivity() {
         registerLink = findViewById(R.id.registerLink)
         btnGoogleSignIn = findViewById(R.id.btnGoogleSignIn) // Vinculando o botão novo!
 
+
         // === CONFIGURAÇÃO DO GOOGLE SIGN-IN ===
         // O "default_web_client_id" é gerado automaticamente pelo seu arquivo google-services.json
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -78,12 +79,7 @@ class LoginActivity : AppCompatActivity() {
 
         googleSignInClient = GoogleSignIn.getClient(this, gso)
 
-        // Ação do Botão do Google
-        btnGoogleSignIn.setOnClickListener {
-            // Abre a janelinha para escolher a conta do Google
-            val signInIntent = googleSignInClient.signInIntent
-            googleSignInLauncher.launch(signInIntent)
-        }
+
         // =======================================
 
         // Ir para cadastro
@@ -104,6 +100,13 @@ class LoginActivity : AppCompatActivity() {
             }
 
             signIn(email, password)
+        }
+
+
+
+        // Set up the sign-in button click handler
+        btnGoogleSignIn.setOnClickListener {
+            signInGoogle()
         }
     }
 
@@ -144,6 +147,44 @@ class LoginActivity : AppCompatActivity() {
             finish() // fecha tela de login
         } else {
             // Só mostra erro de email/senha se a pessoa não estiver tentando logar pelo Google
+        }
+    }
+
+    private fun signInGoogle() {
+        val signInIntent = googleSignInClient.signInIntent
+        startActivityForResult(signInIntent, RC_SIGN_IN)
+    }
+
+    private fun firebaseAuthWithGoogle(account: GoogleSignInAccount) {
+        val credential = GoogleAuthProvider.getCredential(account.idToken, null)
+        firebaseAuth.signInWithCredential(credential)
+            .addOnCompleteListener(this) { task ->
+                if (task.isSuccessful) {
+                    // Login bem-sucedido, navegar para a atividade principal ou atualizar UI
+                    Log.d(TAG, "signInWithGoogle:success")
+                    updateUI(firebaseAuth.currentUser)
+                } else {
+                    // Tratar falha de login
+                    Log.w(TAG, "signInWithGoogle:failure", task.exception)
+                    Toast.makeText(baseContext, "Authentication failed.",
+                        Toast.LENGTH_SHORT).show()
+                    updateUI(null)
+                }
+            }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == RC_SIGN_IN) {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+            try {
+                val account = task.getResult(ApiException::class.java)!!
+                firebaseAuthWithGoogle(account)
+            } catch (e: ApiException) {
+                // Tratar falha de login
+                Log.w(TAG, "onActivityResult:failure", task.exception)
+            }
         }
     }
 }
